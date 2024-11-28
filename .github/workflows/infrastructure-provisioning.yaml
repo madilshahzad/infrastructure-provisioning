@@ -48,7 +48,7 @@ env:
   TF_STATE_FILE_KEY: ${{ secrets.TF_STATE_FILE_KEY }}
   TF_STATE_DYNAMODB_TABLE: ${{ secrets.TF_STATE_DYNAMODB_TABLE }}
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHub-Actions
+  AWS_ROLE_ARN: arn:aws:iam::211125460769:role/Terraform-Role
 
 jobs:
   deploy-infrastructure:
