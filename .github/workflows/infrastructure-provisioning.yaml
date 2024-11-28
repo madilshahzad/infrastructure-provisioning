@@ -87,7 +87,6 @@ jobs:
           cat > ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars <<'EOF'
           node_role_arn      = "${{ secrets.NODE_ROLE_ARN }}"
           master_role_arn    = "${{ secrets.MASTER_ROLE_ARN }}"
-          assume_role_arn    = "${{ secrets.ASSUME_ROLE_ARN }}"
           key_name           = "${{ secrets.KEY_NAME }}"
           users = [
             {
@@ -118,8 +117,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/Terraform-GitHub-Action-OIDC 
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHub-Actions
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Terraform Init
         run: |
