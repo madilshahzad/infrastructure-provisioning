@@ -165,13 +165,15 @@ jobs:
         run: |
           terraform plan -var-file=./terraform/environments/${{ github.event.inputs.TF_ENVIRONMENT }}/prod.tfvars
 
-      - name: Terraform Apply
-        run: |
-          terraform apply -var-file=./terraform/environments/${{ github.event.inputs.TF_ENVIRONMENT }}/prod.tfvars \
-                          -auto-approve
-
       - name: Run tfsec Security Scan
         run: |
           curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
           tfsec .
         continue-on-error: false
+
+      - name: Terraform Apply
+        run: |
+          terraform apply -var-file=./terraform/environments/${{ github.event.inputs.TF_ENVIRONMENT }}/prod.tfvars \
+                          -auto-approve
+
+
