@@ -87,6 +87,7 @@ jobs:
           kubeconfig_path    = "${{ secrets.KUBECONFIG_PATH }}"
           region             = "${{ secrets.AWS_REGION }}"
           cluster_alias      = "${{ secrets.CLUSTER_ALIAS }}"
+          aws_access_role    = "${{ secrets.AWS_ROLE_ARN}}"
           EOF
 
       - name: Display Generated `prod.tfvars` File

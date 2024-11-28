@@ -129,3 +129,8 @@ variable "cluster_alias" {
   description = "Alias of the EKS cluster"
   type        = string
 }
+
+variable "aws_access_role" {
+  description = "Role to assume for AWS provider"
+  type        = string
+}
