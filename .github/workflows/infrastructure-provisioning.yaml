@@ -202,5 +202,4 @@ jobs:
       - name: Terraform Apply
         run: |
           terraform apply -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
-                          -auto-approve \
-                          -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}"
+                          -auto-approve"
