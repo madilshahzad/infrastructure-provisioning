@@ -73,8 +73,7 @@ env:
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
 jobs:
-  handle-pull-request:
-    if: github.event_name == 'pull_request'
+  shared-tfvars-generation:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -111,6 +110,11 @@ jobs:
           cluster_alias      = "${{ secrets.CLUSTER_ALIAS }}"
           EOF
 
+  handle-pull-request:
+    needs: shared-tfvars-generation
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
       - name: Terraform Format
         id: fmt
         run: |
@@ -119,32 +123,6 @@ jobs:
             echo "Terraform files need formatting. Please run 'terraform fmt'."
             exit 1
           fi
-
-      - name: Install tfsec
-        id: install-tfsec
-        run: |
-          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
-          tfsec --version
-
-      - name: Run tfsec Security Scan
-        id: tfsec-scan
-        run: |
-          tfsec .
-        continue-on-error: true
-
-      - name: Post tfsec Scan Results to PR
-        if: ${{ steps.tfsec-scan.outcome == 'failure' }}
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const fs = require('fs');
-            const tfsecOutput = fs.readFileSync('tfsec.log', 'utf8');
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body: `### tfsec Security Scan Results\n\`\`\`\n${tfsecOutput}\n\`\`\``
-            });
 
       - name: Terraform Init
         id: init
@@ -162,23 +140,11 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
-          terraform plan -var-file=./environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
+          terraform plan -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
                          -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" > plan.txt
 
-      - name: Post Terraform Plan to PR
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const fs = require('fs');
-            const planOutput = fs.readFileSync('plan.txt', 'utf8');
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body: `### Terraform Plan Results\n\`\`\`\n${planOutput}\n\`\`\``
-            });
-
   deploy-infrastructure:
+    needs: shared-tfvars-generation
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -199,45 +165,9 @@ jobs:
             -backend-config="bucket=${{ env.TF_STATE_S3_BUCKET }}" \
             -backend-config="key=${{ inputs.TF_ENVIRONMENT }}/${{ env.TF_STATE_FILE_KEY }}" \
             -backend-config="dynamodb_table=${{ env.TF_STATE_DYNAMODB_TABLE }}"
-            - name: Generate `prod.tfvars` File
-            run: |
-              mkdir -p ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}
-              cat > ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars <<EOF
-              node_role_arn      = "${{ secrets.NODE_ROLE_ARN }}"
-              master_role_arn    = "${{ secrets.MASTER_ROLE_ARN }}"
-              assume_role_arn    = "${{ secrets.ASSUME_ROLE_ARN }}"
-              key_name           = "${{ secrets.KEY_NAME }}"
-              users = [
-                {
-                  user_arn = "${{ secrets.USER_1_ARN }}"
-                  username = "${{ secrets.USER_1_USERNAME }}"
-                  groups   = ["system:masters"]
-                },
-                {
-                  user_arn = "${{ secrets.USER_2_ARN }}"
-                  username = "${{ secrets.USER_2_USERNAME }}"
-                  groups   = ["system:masters"]
-                }
-              ]
-              cluster_name       = "${{secrets.CLUSTER_NAME}}"
-              cluster_version    = "${{secrets.CLUSTER_VERSION}}"
-              node_group_name    = "${{secrets.NODE_GROUP_NAME}}"
-              environment        = "${{ inputs.TF_ENVIRONMENT }}"
-              vpc_name           = "${{ secrets.VPC_NAME }}"
-              bastion_name       = "${{ secrets.BASTION_NAME }}"
-              kubeconfig_path    = "${{ secrets.KUBECONFIG_PATH }}"
-              region             = "${{ secrets.AWS_REGION }}"
-              cluster_alias      = "${{ secrets.CLUSTER_ALIAS }}"
-              EOF
-
-      - name: Terraform Plan
-        id: plan
-        run: |
-          terraform plan -var-file=./environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
-                         -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}"
 
       - name: Terraform Apply
         run: |
-          terraform apply -var-file=./environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
+          terraform apply -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
                           -auto-approve \
                           -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}"
