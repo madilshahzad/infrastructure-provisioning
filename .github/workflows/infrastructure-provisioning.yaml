@@ -6,35 +6,8 @@ permissions:
   pull-requests: write
 
 on:
-  workflow_call:
-    secrets:
-      AWS_REGION:
-        required: true
-        description: AWS region for deployment
-      S3_AWS_REGION:
-        required: true
-        description: AWS region for the S3 backend
-      TF_STATE_S3_BUCKET:
-        required: true
-        description: Name of the S3 bucket for Terraform state
-      TF_STATE_FILE_KEY:
-        required: true
-        description: Key name of the Terraform state file
-      TF_STATE_DYNAMODB_TABLE:
-        required: true
-        description: DynamoDB table for Terraform state locking
-      AWS_ACCOUNT_ID:
-        required: true
-        description: AWS Account ID for authentication
-
-
-    inputs:
-      TF_ENVIRONMENT:
-        description: Terraform environment (e.g., dev, prod)
-        required: true
-        type: string
-
-  workflow_dispatch:
+  pull_request: # For PR checks (fmt, plan, tfsec)
+  workflow_dispatch: # For manual triggers
     inputs:
       TF_ENVIRONMENT:
         description: Terraform environment (e.g., dev, prod)
@@ -51,10 +24,52 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHub-Actions
 
 jobs:
-  deploy-infrastructure:
-    environment:
-        name: ${{ inputs.TF_ENVIRONMENT }}
+  pull-request-checks:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    name: Pull Request Checks (Terraform FMT, Plan, TFSec)
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Terraform Format Check
+        run: |
+          terraform fmt -check
+          if [ $? -ne 0 ]; then
+            echo "Terraform files need formatting. Please run 'terraform fmt' locally."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="region=${{ env.S3_AWS_REGION }}" \
+            -backend-config="bucket=${{ env.TF_STATE_S3_BUCKET }}" \
+            -backend-config="key=${{ inputs.TF_ENVIRONMENT }}/${{ env.TF_STATE_FILE_KEY }}" \
+            -backend-config="dynamodb_table=${{ env.TF_STATE_DYNAMODB_TABLE }}"
+
+      - name: Terraform Plan
+        run: |
+          terraform plan -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
+
+      - name: Run tfsec Security Scan
+        run: |
+          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+          tfsec .
+        continue-on-error: false
+
+  deploy-infrastructure:
+    if: github.event_name != 'pull_request'
+    environment:
+      name: ${{ inputs.TF_ENVIRONMENT }}
+    runs-on: ubuntu-latest
+    name: Deploy Infrastructure (Terraform Apply and Security)
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -87,7 +102,7 @@ jobs:
           kubeconfig_path    = "${{ secrets.KUBECONFIG_PATH }}"
           region             = "${{ secrets.AWS_REGION }}"
           cluster_alias      = "${{ secrets.CLUSTER_ALIAS }}"
-          aws_access_role    = "${{ secrets.AWS_Access_ROLE_ARN}}"
+          aws_access_role    = "${{ secrets.AWS_Access_ROLE_ARN }}"
           EOF
 
       - name: Display Generated `prod.tfvars` File
@@ -107,7 +122,25 @@ jobs:
             -backend-config="key=${{ inputs.TF_ENVIRONMENT }}/${{ env.TF_STATE_FILE_KEY }}" \
             -backend-config="dynamodb_table=${{ env.TF_STATE_DYNAMODB_TABLE }}"
 
-      - name: Terraform Destroy
+      - name: Terraform Format Check
+        run: |
+          terraform fmt -check
+          if [ $? -ne 0 ]; then
+            echo "Terraform files need formatting. Please run 'terraform fmt' locally."
+            exit 1
+          fi
+
+      - name: Terraform Plan
+        run: |
+          terraform plan -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
+
+      - name: Terraform Apply
         run: |
           terraform apply -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
                           -auto-approve
+
+      - name: Run tfsec Security Scan
+        run: |
+          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+          tfsec .
+        continue-on-error: false
