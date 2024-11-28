@@ -1,12 +1,32 @@
 name: Provision Infrastructure for the Application
 
 permissions:
-    id-token: write
-    contents: write
-    pull-requests: write
-    
+  id-token: write
+  contents: write
+  pull-requests: write
+
 on:
   workflow_call:
+    secrets:
+      AWS_REGION:
+        required: true
+        description: AWS region for deployment
+      S3_AWS_REGION:
+        required: true
+        description: AWS region for the S3 backend
+      TF_STATE_S3_BUCKET:
+        required: true
+        description: Name of the S3 bucket for Terraform state
+      TF_STATE_FILE_KEY:
+        required: true
+        description: Key name of the Terraform state file
+      TF_STATE_DYNAMODB_TABLE:
+        required: true
+        description: DynamoDB table for Terraform state locking
+      AWS_ACCOUNT_ID:
+        required: true
+        description: AWS Account ID for authentication
+
     inputs:
       TF_ENVIRONMENT:
         description: Terraform environment (e.g., dev, prod)
@@ -20,14 +40,13 @@ on:
         required: true
         type: string
 
-
-
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   S3_AWS_REGION: ${{ secrets.S3_AWS_REGION }}
   TF_STATE_S3_BUCKET: ${{ secrets.TF_STATE_S3_BUCKET }}
   TF_STATE_FILE_KEY: ${{ secrets.TF_STATE_FILE_KEY }}
   TF_STATE_DYNAMODB_TABLE: ${{ secrets.TF_STATE_DYNAMODB_TABLE }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
 defaults:
   run:
