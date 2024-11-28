@@ -74,12 +74,14 @@ env:
 
 jobs:
   deploy-infrastructure:
+    environment:
+      name: ${{ inputs.TF_ENVIRONMENT }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Generate `prod.tfvars` File
+      - name: Set Environment Variables from `prod.tfvars`
         run: |
           mkdir -p ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}
           cat > ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars <<'EOF'
@@ -110,8 +112,19 @@ jobs:
           cluster_alias      = "${{ secrets.CLUSTER_ALIAS }}"
           EOF
 
-      - name: Display Generated `prod.tfvars` File
-        run: cat ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
+      - name: Export Variables from `prod.tfvars` to Environment
+        run: |
+          while IFS= read -r line; do
+            if [[ $line =~ ^[[:space:]]*[^#]*=.*$ ]]; then
+              key=$(echo $line | cut -d= -f1 | tr -d '[:space:]')
+              value=$(echo $line | cut -d= -f2- | tr -d '"')
+              echo "Exporting $key=$value"
+              echo "$key=$value" >> $GITHUB_ENV
+            fi
+          done < ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
+
+      - name: Debug Exported Environment Variables
+        run: env
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
@@ -129,5 +142,4 @@ jobs:
 
       - name: Terraform Apply
         run: |
-          terraform apply -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
-                          -auto-approve
+          terraform apply -auto-approve
