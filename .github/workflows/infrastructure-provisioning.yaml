@@ -1,5 +1,10 @@
 name: Provision Infrastructure for the Application
 
+permissions:
+    id-token: write
+    contents: write
+    pull-requests: write
+    
 on:
   workflow_call:
     inputs:
@@ -7,14 +12,15 @@ on:
         description: Terraform environment (e.g., dev, prod)
         required: true
         type: string
-  pull_request:
-    branches:
-      - main
 
-permissions:
-  id-token: write
-  contents: write
-  pull-requests: write
+  workflow_dispatch:
+    inputs:
+      TF_ENVIRONMENT:
+        description: Terraform environment (e.g., dev, prod)
+        required: true
+        type: string
+
+
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
