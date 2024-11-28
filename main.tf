@@ -13,10 +13,7 @@ terraform {
 
 provider "aws" {
   region = var.region
-  assume_role {
-    role_arn = "arn:aws:iam::211125460769:role/GitHub-Actions"
-    session_name = "TerraformSession"
-  }
+
 
 }
 

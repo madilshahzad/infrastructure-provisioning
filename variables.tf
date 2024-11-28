@@ -130,7 +130,3 @@ variable "cluster_alias" {
   type        = string
 }
 
-variable "aws_access_role" {
-  description = "Role to assume for AWS provider"
-  type        = string
-}
