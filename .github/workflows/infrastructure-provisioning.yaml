@@ -45,6 +45,32 @@ jobs:
             exit 1
           fi
 
+      - name: Install tfsec
+        id: install-tfsec
+        run: |
+          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+          tfsec --version
+
+      - name: Run tfsec Security Scan
+        id: tfsec-scan
+        run: |
+          tfsec .
+        continue-on-error: true
+
+      - name: Post tfsec Scan Results to PR
+        if: ${{ steps.tfsec-scan.outcome == 'failure' }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const tfsecOutput = fs.readFileSync('tfsec.log', 'utf8');
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `### tfsec Security Scan Results\n\`\`\`\n${tfsecOutput}\n\`\`\``
+            });
+
       - name: Terraform Init
         id: init
         run: |
@@ -109,4 +135,4 @@ jobs:
         run: |
           terraform apply -var-file=./environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
                           -auto-approve \
-                          -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}
+                          -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}"
