@@ -40,7 +40,13 @@ on:
         required: true
         type: string
 
-
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  S3_AWS_REGION: ${{ secrets.S3_AWS_REGION }}
+  TF_STATE_S3_BUCKET: ${{ secrets.TF_STATE_S3_BUCKET }}
+  TF_STATE_FILE_KEY: ${{ secrets.TF_STATE_FILE_KEY }}
+  TF_STATE_DYNAMODB_TABLE: ${{ secrets.TF_STATE_DYNAMODB_TABLE }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
 
 jobs:
