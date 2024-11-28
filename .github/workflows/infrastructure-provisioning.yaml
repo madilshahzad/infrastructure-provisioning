@@ -73,9 +73,9 @@ env:
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
 jobs:
-  deploy-infrastructure:
+  generate-tfvars:
     environment:
-        name: ${{ inputs.TF_ENVIRONMENT }}
+      name: ${{ inputs.TF_ENVIRONMENT }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -113,6 +113,28 @@ jobs:
           EOF
 
       - name: Display Generated `prod.tfvars` File
+        run: cat ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
+
+      - name: Upload `prod.tfvars` as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfvars-file
+          path: ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
+
+  deploy-infrastructure:
+    needs: generate-tfvars
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Download `prod.tfvars` Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: tfvars-file
+          path: ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}
+
+      - name: Display Downloaded `prod.tfvars` File
         run: cat ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
 
       - name: Configure AWS credentials
