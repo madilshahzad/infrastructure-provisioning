@@ -26,30 +26,7 @@ on:
       AWS_ACCOUNT_ID:
         required: true
         description: AWS Account ID for authentication
-      NODE_ROLE_ARN:
-        required: true
-        description: Node role ARN
-      MASTER_ROLE_ARN:
-        required: true
-        description: Master role ARN
-      ASSUME_ROLE_ARN:
-        required: true
-        description: Assume role ARN
-      KEY_NAME:
-        required: true
-        description: SSH Key name
-      USER_1_ARN:
-        required: true
-        description: User 1 ARN
-      USER_1_USERNAME:
-        required: true
-        description: User 1 username
-      USER_2_ARN:
-        required: true
-        description: User 2 ARN
-      USER_2_USERNAME:
-        required: true
-        description: User 2 username
+
 
     inputs:
       TF_ENVIRONMENT:
@@ -117,7 +94,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHub-Actions
+          role-to-assume: arn:aws:iam::211125460769:role/GitHub-Actions
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Terraform Init
