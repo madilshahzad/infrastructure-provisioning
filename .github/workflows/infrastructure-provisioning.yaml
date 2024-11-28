@@ -106,7 +106,7 @@ jobs:
             -backend-config="key=${{ inputs.TF_ENVIRONMENT }}/${{ env.TF_STATE_FILE_KEY }}" \
             -backend-config="dynamodb_table=${{ env.TF_STATE_DYNAMODB_TABLE }}"
 
-      - name: Terraform Apply
+      - name: Terraform Destroy
         run: |
-          terraform apply -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
+          terraform destroy -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
                           -auto-approve
