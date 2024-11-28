@@ -74,6 +74,8 @@ env:
 
 jobs:
   deploy-infrastructure:
+    environment:
+        name: ${{ inputs.TF_ENVIRONMENT }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
