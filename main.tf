@@ -61,7 +61,6 @@ module "eks" {
   node_group_name                      = var.node_group_name
   key_name                             = var.key_name
   environment                          = var.environment
-  assume_role_arn                      = var.assume_role_arn
   cluster_alias                       = var.cluster_alias 
   region                               = var.region
 
