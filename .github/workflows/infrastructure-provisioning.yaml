@@ -26,6 +26,9 @@ on:
       AWS_ACCOUNT_ID:
         required: true
         description: AWS Account ID for authentication
+      TFVARS_DYNAMODB_TABLE:
+        required: true
+        description: DynamoDB table name for storing environment-specific variables
 
     inputs:
       TF_ENVIRONMENT:
@@ -47,16 +50,35 @@ env:
   TF_STATE_FILE_KEY: ${{ secrets.TF_STATE_FILE_KEY }}
   TF_STATE_DYNAMODB_TABLE: ${{ secrets.TF_STATE_DYNAMODB_TABLE }}
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-
-
+  TFVARS_DYNAMODB_TABLE: ${{ secrets.TFVARS_DYNAMODB_TABLE }}
 
 jobs:
-  handle-pull-request:
-    if: github.event_name == 'pull_request'
+  terraform:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
+
+      - name: Fetch Environment Variables from DynamoDB
+        id: fetch-dynamodb
+        run: |
+          # Fetch environment-specific variables from the DynamoDB table
+          ENVIRONMENT="${{ inputs.TF_ENVIRONMENT }}"
+          VARIABLES=$(aws dynamodb get-item \
+            --region "${{ env.AWS_REGION }}" \
+            --table-name "${{ env.TFVARS_DYNAMODB_TABLE }}" \
+            --key "{\"environment\": {\"S\": \"$ENVIRONMENT\"}}" \
+            --output json | jq -r '.Item.variables.S')
+
+          if [ -z "$VARIABLES" ]; then
+            echo "No variables found for environment: $ENVIRONMENT"
+            exit 1
+          fi
+
+          echo "Variables fetched from DynamoDB: $VARIABLES"
+
+          # Write variables to a temporary prod.tfvars file
+          echo "$VARIABLES" > ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
 
       - name: Terraform Format
         id: fmt
@@ -109,7 +131,7 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
-          terraform plan -var-file=./environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
+          terraform plan -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
                          -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" > plan.txt
 
       - name: Post Terraform Plan to PR
@@ -125,36 +147,15 @@ jobs:
               body: `### Terraform Plan Results\n\`\`\`\n${planOutput}\n\`\`\``
             });
 
-  deploy-infrastructure:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/Terraform-GitHub-Action-OIDC 
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        id: init
+      - name: Cleanup Temporary Files
+        if: always()
         run: |
-          terraform init \
-            -backend-config="region=${{ env.S3_AWS_REGION }}" \
-            -backend-config="bucket=${{ env.TF_STATE_S3_BUCKET }}" \
-            -backend-config="key=${{ inputs.TF_ENVIRONMENT }}/${{ env.TF_STATE_FILE_KEY }}" \
-            -backend-config="dynamodb_table=${{ env.TF_STATE_DYNAMODB_TABLE }}"
-
-      - name: Terraform Plan
-        id: plan
-        run: |
-          terraform plan -var-file=./environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
-                         -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}"
+          rm -f ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
 
       - name: Terraform Apply
+        if: github.event_name != 'pull_request'
         run: |
-          terraform apply -var-file=./environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
-                          -auto-approve \
-                          -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}"
+          terraform apply \
+            -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars \
+            -auto-approve \
+            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}"
