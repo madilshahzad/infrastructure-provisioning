@@ -26,12 +26,31 @@ on:
       AWS_ACCOUNT_ID:
         required: true
         description: AWS Account ID for authentication
-      TERRAFORM_ROLE:
+      NODE_ROLE_ARN:
         required: true
-        description: Role for Terraform actions
-      GITHUB_ACTION_ROLE:
+        description: Node role ARN
+      MASTER_ROLE_ARN:
         required: true
-        description: Role for general GitHub actions
+        description: Master role ARN
+      ASSUME_ROLE_ARN:
+        required: true
+        description: Assume role ARN
+      KEY_NAME:
+        required: true
+        description: SSH Key name
+      USER_1_ARN:
+        required: true
+        description: User 1 ARN
+      USER_1_USERNAME:
+        required: true
+        description: User 1 username
+      USER_2_ARN:
+        required: true
+        description: User 2 ARN
+      USER_2_USERNAME:
+        required: true
+        description: User 2 username
+
     inputs:
       TF_ENVIRONMENT:
         description: Terraform environment (e.g., dev, prod)
@@ -54,17 +73,13 @@ env:
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
 jobs:
-  generate-tfvars:
+  deploy-infrastructure:
+    environment:
+        name: ${{ inputs.TF_ENVIRONMENT }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-
-      - name: Configure AWS Credentials for GitHub Actions
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.GITHUB_ACTION_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Generate `prod.tfvars` File
         run: |
@@ -72,7 +87,7 @@ jobs:
           cat > ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars <<'EOF'
           node_role_arn      = "${{ secrets.NODE_ROLE_ARN }}"
           master_role_arn    = "${{ secrets.MASTER_ROLE_ARN }}"
-          assume_role_arn    = "${{ secrets.TERRAFORM_ROLE }}"
+          assume_role_arn    = "${{ secrets.ASSUME_ROLE_ARN }}"
           key_name           = "${{ secrets.KEY_NAME }}"
           users = [
             {
@@ -100,33 +115,11 @@ jobs:
       - name: Display Generated `prod.tfvars` File
         run: cat ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
 
-      - name: Upload `prod.tfvars` as Artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: tfvars-file
-          path: ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
-
-  deploy-infrastructure:
-    needs: generate-tfvars
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Download `prod.tfvars` Artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: tfvars-file
-          path: ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}
-
-      - name: Display Downloaded `prod.tfvars` File
-        run: cat ./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
-
-      - name: Configure AWS Credentials for Terraform
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.TERRAFORM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/Terraform-GitHub-Action-OIDC 
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
         run: |
@@ -135,10 +128,6 @@ jobs:
             -backend-config="bucket=${{ env.TF_STATE_S3_BUCKET }}" \
             -backend-config="key=${{ inputs.TF_ENVIRONMENT }}/${{ env.TF_STATE_FILE_KEY }}" \
             -backend-config="dynamodb_table=${{ env.TF_STATE_DYNAMODB_TABLE }}"
-
-      - name: Terraform Plan
-        run: |
-          terraform plan -var-file=./terraform/environments/${{ inputs.TF_ENVIRONMENT }}/prod.tfvars
 
       - name: Terraform Apply
         run: |
