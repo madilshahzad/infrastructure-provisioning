@@ -115,11 +115,6 @@ variable "bastion_name" {
   type        = string
 }
 
-variable "assume_role_arn" {
-  description = "ARN of the role to assume"
-  type        = string
-}
-
 variable "kubeconfig_path" {
   description = "Path to the kubeconfig file"
   type        = string
