@@ -1,181 +1,46 @@
-name: Provision Infrastructure for the Application
+name: Deploy Infrastructure
+
+on:
+  pull_request:
+    inputs:
+      TF_ENVIRONMENT:
+        description: Terraform environment (e.g., dev, prod)
+        required: true
+  workflow_dispatch:
+    inputs:
+      TF_ENVIRONMENT:
+        description: Terraform environment (e.g., dev, prod)
+        required: true
 
 permissions:
   id-token: write
   contents: write
   pull-requests: write
 
-on:
-  pull_request: # For PR checks (fmt, plan, tfsec)
-  workflow_dispatch: # For manual triggers
-    inputs:
-      TF_ENVIRONMENT:
-        description: Terraform environment (e.g., dev, prod)
-        required: true
-        type: string
-
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  S3_AWS_REGION: ${{ secrets.S3_AWS_REGION }}
-  TF_STATE_S3_BUCKET: ${{ secrets.TF_STATE_S3_BUCKET }}
-  TF_STATE_FILE_KEY: ${{ secrets.TF_STATE_FILE_KEY }}
-  TF_STATE_DYNAMODB_TABLE: ${{ secrets.TF_STATE_DYNAMODB_TABLE }}
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHub-Actions
-
 jobs:
-  pull-request-checks:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    name: Pull Request Checks (Terraform FMT, Plan, TFSec)
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Generate `prod.tfvars` File
-        run: |
-          mkdir -p ./terraform/environments/${{ github.event.inputs.TF_ENVIRONMENT }}
-          cat > ./terraform/environments/${{ github.event.inputs.TF_ENVIRONMENT }}/prod.tfvars <<'EOF'
-          node_role_arn      = "${{ secrets.NODE_ROLE_ARN }}"
-          master_role_arn    = "${{ secrets.MASTER_ROLE_ARN }}"
-          key_name           = "${{ secrets.KEY_NAME }}"
-          users = [
-            {
-              user_arn = "${{ secrets.USER_1_ARN }}"
-              username = "${{ secrets.USER_1_USERNAME }}"
-              groups   = ["system:masters"]
-            },
-            {
-              user_arn = "${{ secrets.USER_2_ARN }}"
-              username = "${{ secrets.USER_2_USERNAME }}"
-              groups   = ["system:masters"]
-            }
-          ]
-          cluster_name       = "${{ secrets.CLUSTER_NAME }}"
-          cluster_version    = "${{ secrets.CLUSTER_VERSION }}"
-          node_group_name    = "${{ secrets.NODE_GROUP_NAME }}"
-          environment        = "${{ github.event.inputs.TF_ENVIRONMENT }}"
-          vpc_name           = "${{ secrets.VPC_NAME }}"
-          bastion_name       = "${{ secrets.BASTION_NAME }}"
-          kubeconfig_path    = "${{ secrets.KUBECONFIG_PATH }}"
-          region             = "${{ secrets.AWS_REGION }}"
-          cluster_alias      = "${{ secrets.CLUSTER_ALIAS }}"
-          aws_access_role    = "${{ secrets.AWS_Access_ROLE_ARN }}"
-          EOF
-
-      - name: Terraform Format Check
-        run: |
-          terraform fmt -check
-          if [ $? -ne 0 ]; then
-            echo "Terraform files need formatting. Please run 'terraform fmt' locally."
-            exit 1
-          fi
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="region=${{ env.S3_AWS_REGION }}" \
-            -backend-config="bucket=${{ env.TF_STATE_S3_BUCKET }}" \
-            -backend-config="key=${{ github.event.inputs.TF_ENVIRONMENT }}/${{ env.TF_STATE_FILE_KEY }}" \
-            -backend-config="dynamodb_table=${{ env.TF_STATE_DYNAMODB_TABLE }}"
-
-      - name: Terraform Plan
-        run: |
-          terraform plan -var-file=./terraform/environments/${{ github.event.inputs.TF_ENVIRONMENT }}/prod.tfvars
-        continue-on-error: true
-
-      - name: Run tfsec Security Scan
-        run: |
-          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
-          tfsec .
-        continue-on-error: true
-
   deploy-infrastructure:
-    if: github.event_name != 'pull_request'
-    environment:
-      name: ${{ github.event.inputs.TF_ENVIRONMENT }}
-    runs-on: ubuntu-latest
-    name: Deploy Infrastructure (Terraform Apply and Security)
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Generate `prod.tfvars` File
-        run: |
-          mkdir -p ./terraform/environments/${{ github.event.inputs.TF_ENVIRONMENT }}
-          cat > ./terraform/environments/${{ github.event.inputs.TF_ENVIRONMENT }}/prod.tfvars <<'EOF'
-          node_role_arn      = "${{ secrets.NODE_ROLE_ARN }}"
-          master_role_arn    = "${{ secrets.MASTER_ROLE_ARN }}"
-          key_name           = "${{ secrets.KEY_NAME }}"
-          users = [
-            {
-              user_arn = "${{ secrets.USER_1_ARN }}"
-              username = "${{ secrets.USER_1_USERNAME }}"
-              groups   = ["system:masters"]
-            },
-            {
-              user_arn = "${{ secrets.USER_2_ARN }}"
-              username = "${{ secrets.USER_2_USERNAME }}"
-              groups   = ["system:masters"]
-            }
-          ]
-          cluster_name       = "${{ secrets.CLUSTER_NAME }}"
-          cluster_version    = "${{ secrets.CLUSTER_VERSION }}"
-          node_group_name    = "${{ secrets.NODE_GROUP_NAME }}"
-          environment        = "${{ github.event.inputs.TF_ENVIRONMENT }}"
-          vpc_name           = "${{ secrets.VPC_NAME }}"
-          bastion_name       = "${{ secrets.BASTION_NAME }}"
-          kubeconfig_path    = "${{ secrets.KUBECONFIG_PATH }}"
-          region             = "${{ secrets.AWS_REGION }}"
-          cluster_alias      = "${{ secrets.CLUSTER_ALIAS }}"
-          aws_access_role    = "${{ secrets.AWS_Access_ROLE_ARN }}"
-          EOF
-
-      - name: Display Generated `prod.tfvars` File
-        run: cat ./terraform/environments/${{ github.event.inputs.TF_ENVIRONMENT }}/prod.tfvars
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="region=${{ env.S3_AWS_REGION }}" \
-            -backend-config="bucket=${{ env.TF_STATE_S3_BUCKET }}" \
-            -backend-config="key=${{ github.event.inputs.TF_ENVIRONMENT }}/${{ env.TF_STATE_FILE_KEY }}" \
-            -backend-config="dynamodb_table=${{ env.TF_STATE_DYNAMODB_TABLE }}"
-
-      - name: Terraform Format Check
-        run: |
-          terraform fmt -check
-          if [ $? -ne 0 ]; then
-            echo "Terraform files need formatting. Please run 'terraform fmt' locally."
-            exit 1
-          fi
-        continue-on-error: true
-
-      - name: Terraform Plan
-        run: |
-          terraform plan -var-file=./terraform/environments/${{ github.event.inputs.TF_ENVIRONMENT }}/prod.tfvars
-
-      - name: Run tfsec Security Scan
-        run: |
-          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
-          tfsec .
-        continue-on-error: true
-
-      - name: Terraform Apply
-        run: |
-          terraform apply -var-file=./terraform/environments/${{ github.event.inputs.TF_ENVIRONMENT }}/prod.tfvars \
-                          -auto-approve
-
-
+    uses: madilshahzad/reusable-template/.github/workflows/infrastructure-provisioning.yml@main
+    with:
+      TF_ENVIRONMENT: ${{ github.event.inputs.TF_ENVIRONMENT }}
+    secrets:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      S3_AWS_REGION: ${{ secrets.S3_AWS_REGION }}
+      TF_STATE_S3_BUCKET: ${{ secrets.TF_STATE_S3_BUCKET }}
+      TF_STATE_FILE_KEY: ${{ secrets.TF_STATE_FILE_KEY }}
+      TF_STATE_DYNAMODB_TABLE: ${{ secrets.TF_STATE_DYNAMODB_TABLE }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      NODE_ROLE_ARN: ${{ secrets.NODE_ROLE_ARN }}
+      MASTER_ROLE_ARN: ${{ secrets.MASTER_ROLE_ARN }}
+      KEY_NAME: ${{ secrets.KEY_NAME }}
+      USER_1_ARN: ${{ secrets.USER_1_ARN }}
+      USER_1_USERNAME: ${{ secrets.USER_1_USERNAME }}
+      USER_2_ARN: ${{ secrets.USER_2_ARN }}
+      USER_2_USERNAME: ${{ secrets.USER_2_USERNAME }}
+      CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
+      CLUSTER_VERSION: ${{ secrets.CLUSTER_VERSION }}
+      NODE_GROUP_NAME: ${{ secrets.NODE_GROUP_NAME }}
+      VPC_NAME: ${{ secrets.VPC_NAME }}
+      BASTION_NAME: ${{ secrets.BASTION_NAME }}
+      KUBECONFIG_PATH: ${{ secrets.KUBECONFIG_PATH }}
+      CLUSTER_ALIAS: ${{ secrets.CLUSTER_ALIAS }}
+      AWS_Access_ROLE_ARN: ${{ secrets.AWS_Access_ROLE_ARN }}
