@@ -1,3 +1,4 @@
+[![Deploy Infrastructure](https://github.com/madilshahzad/infrastructure-provisioning/actions/workflows/infrastructure-provisioning.yaml/badge.svg)](https://github.com/madilshahzad/infrastructure-provisioning/actions/workflows/infrastructure-provisioning.yaml)
 # Infrastructure as Code (IaC) with Terraform
 
 This repository contains the Terraform configuration files for provisioning infrastructure. The workflow includes scanning the infrastructure code using `tfsec` and managing sensitive parameters through GitHub Actions secrets. The Terraform state is stored in an S3 bucket, with DynamoDB used for state locking.
