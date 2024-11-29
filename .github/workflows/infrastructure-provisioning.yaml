@@ -19,9 +19,6 @@ permissions:
 
 jobs:
   deploy-infrastructure:
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ github.event.inputs.TF_ENVIRONMENT }}
     uses: madilshahzad/reusable-template/.github/workflows/infrastructure-provisioning.yml@main
     with:
       TF_ENVIRONMENT: ${{ github.event.inputs.TF_ENVIRONMENT }}
